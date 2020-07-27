@@ -1,0 +1,18 @@
+%YAML:1.0
+image0_id: '0825'
+image1_id: '0830'
+image0_type: rgb
+image1_type: rgb
+
+use_groundtruth: '1'
+
+dataset: eth_cvg
+
+im_address: /home/zhaozhong/dataset/ethz_cvg/ethl_syn1_global/ethl1_global/
+
+depth_factor: 5000.0
+
+fx: 481.20
+fy: -480.0
+cx: 319.50
+cy: 239.50
