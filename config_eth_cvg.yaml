@@ -1,6 +1,7 @@
 %YAML:1.0
-image0_id: '0825'
-image1_id: '0830'
+#In our experiment, we normally use two images that id's difference is 5 to compare
+image0_id: '0030'
+image1_id: '0035'
 image0_type: rgb
 image1_type: rgb
 

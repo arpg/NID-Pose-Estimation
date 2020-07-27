@@ -1,5 +1,3 @@
-//Using synthetic dataset to test the property of image NID
-
 #include <opencv2/opencv.hpp>
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -175,9 +173,9 @@ int main(int argc, char** argv){
     const Eigen::Matrix4d SE3_ori= T_wc1;
     Eigen::Vector3d t_dist;
     double t_offset = 0.02; 
-    double r_offset = 0.007;//0.005 has good result, 0.007 also shows a lot improvements
+    double r_offset = 0.005;
 
-    t_dist<<t_offset, -t_offset, t_offset;
+    t_dist<<0.5*t_offset, -t_offset, t_offset;
 
     Eigen::Matrix3d rotation_dist;
     rotation_dist = Eigen::AngleAxisd(-r_offset*M_PI, Eigen::Vector3d::UnitX())
@@ -194,9 +192,8 @@ int main(int argc, char** argv){
     Eigen::Vector3d t_cw1;
     r_cw1 = T_wc1.block<3,3>(0,0).transpose();
     t_cw1 = -r_cw1 * T_wc1.block<3,1>(0,3);
-    //std::cout<<"inv t_fcw 1 \n"<<r_cw1<<"\n"<<t_cw1.transpose()<<std::endl;
     
-    vSE3->setEstimate(g2o::SE3Quat(r_cw1,t_cw1));//g2o::SE3Quat(r_cw1,t_cw1)//g2o::SE3Quat(Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero())
+    vSE3->setEstimate(g2o::SE3Quat(r_cw1,t_cw1));
     vSE3->setId(0);
     vSE3->setFixed(false);
     optimizer.addVertex(vSE3);
