@@ -50,7 +50,7 @@ IF(UNIX)
   MESSAGE(STATUS "Compiling on Unix")
 ENDIF(UNIX)
 
-find_package(OpenCV 3.0 QUIET)
+find_package(OpenCV QUIET)
 
 # Eigen library parallelise itself, though, presumably due to performance issues
 # OPENMP is experimental. We experienced some slowdown with it
