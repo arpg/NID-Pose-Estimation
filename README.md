@@ -1,6 +1,6 @@
 This repo is an implementation of NID based pose estimation. Implementtion detial can be seen in paper `Robust Dense Visual SLAM Using Cell Based Normalized Information Distance`. If you use this work, please kindly consider citing
 ```
-TO BE ADDED, accpeted by IROS 2021
+TO BE ADDED, accpeted by IROS 2021: Robust Pose Estimation Based  on Normalized  Information  Distance
 ```
 
 ### Requirement
