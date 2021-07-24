@@ -65,6 +65,8 @@ namespace g2o {
        */
       virtual bool buildSystem() = 0;
 
+      virtual void set_j_bs(double* der){printf("should realize this in block solver h");}
+
       /**
        * solve Ax = b
        */

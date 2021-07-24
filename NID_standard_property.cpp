@@ -1,5 +1,3 @@
-//Using TSUKUBA dataset to test the property of image NID
-
 #include <opencv2/opencv.hpp>
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -148,6 +146,7 @@ int main(int argc, char** argv){
     in.cx = cx;
     in.cy = cy;
 
+    std::vector<std::shared_ptr<NID> > nid_vec;
     Eigen::Matrix4d T_wc0, T_wc1;
     T_wc0<<T_wc0_cv.ptr<double>(0)[0], T_wc0_cv.ptr<double>(0)[1], T_wc0_cv.ptr<double>(0)[2], T_wc0_cv.ptr<double>(0)[3],
           T_wc0_cv.ptr<double>(1)[0], T_wc0_cv.ptr<double>(1)[1], T_wc0_cv.ptr<double>(1)[2], T_wc0_cv.ptr<double>(1)[3],
@@ -158,10 +157,12 @@ int main(int argc, char** argv){
           T_wc1_cv.ptr<double>(2)[0], T_wc1_cv.ptr<double>(2)[1], T_wc1_cv.ptr<double>(2)[2], T_wc1_cv.ptr<double>(2)[3],
           0                              , 0                              , 0                              , 1;
 
+    std::ofstream of("nid_test.csv", std::ofstream::out | std::ofstream::app);
+
     const double px_ori = T_wc0(0,3);
     const Eigen::Matrix4d SE3_ori= T_wc0;
 
-      //calculate entropy of each cell
+    //calculate entropy of each cell
     double total_nid = 0.0;
     for(int i = 0; i<cell; i++){
         for(int j = 0; j<cell; j++){
@@ -183,9 +184,12 @@ int main(int argc, char** argv){
             nid->ComputeHref();
             nid->ComputeH();
             total_nid += nid->nid_ * nid->nid_;
+            //exit(0);
         }
     }
+
     std::cout<<"final nid is "<<sqrt(total_nid)<<std::endl;
+    
 
     
 
@@ -201,7 +205,7 @@ void Get3dPointAndIntensity(int cell_size, int cell_row_id, int cell_col_id, con
     int row_end = row_block * (cell_row_id + 1);
     int col_end = col_block * (cell_col_id + 1);
     int counter = 0;
-
+    
     std::vector<double> intensity_v;
     for(int i = row_start; i < row_end; i++)
         for(int j = col_start; j < col_end; j++){
@@ -246,52 +250,52 @@ std::vector<cv::Mat> ReadGroundtruth(std::string add, std::string dataset){
       if (dataset == "eth_cvg"){
       double qx,qy,qz,qw;
       while(getline(temp_one_row_gt, string_gt, ' ')){
-          switch(sequence){
-            case 0:{
-                int msg_timestamp = atoi(string_gt.c_str());
-                sequence++;
-            }
-                break;
-            case 1:{
-                //the case 1,2,3 is position x,y,z
-                px = (double)atof(string_gt.c_str());
-                sequence++;
-            }
-                break;
-            case 2:{
-                py = (double)atof(string_gt.c_str());
-                sequence++;
-            }
-                break;
-            case 3:{
-                pz = (double)atof(string_gt.c_str());
-                sequence++;
-            }
-                break;
-            case 4:{
-                //the case 4,5,6,7 is quternion x,y,z,w
-                qx = (double)atof(string_gt.c_str());
-                sequence++;
-            }
-                break;
-            case 5:{
-                qy = (double)atof(string_gt.c_str());
-                sequence++;
-            }
-                break;
-            case 6:{
-                qz = (double)atof(string_gt.c_str());
-                sequence++;
-            }
-                break;
-            case 7:{
-                qw = (double)atof(string_gt.c_str());
-                sequence++;
-            }
-                break;
-            default:
-                break;
+        switch(sequence){
+          case 0:{
+              int msg_timestamp = atoi(string_gt.c_str());
+              sequence++;
           }
+              break;
+          case 1:{
+              //the case 1,2,3 is position x,y,z
+              px = (double)atof(string_gt.c_str());
+              sequence++;
+          }
+              break;
+          case 2:{
+              py = (double)atof(string_gt.c_str());
+              sequence++;
+          }
+              break;
+          case 3:{
+              pz = (double)atof(string_gt.c_str());
+              sequence++;
+          }
+              break;
+          case 4:{
+              //the case 4,5,6,7 is quternion x,y,z,w
+              qx = (double)atof(string_gt.c_str());
+              sequence++;
+          }
+              break;
+          case 5:{
+              qy = (double)atof(string_gt.c_str());
+              sequence++;
+          }
+              break;
+          case 6:{
+              qz = (double)atof(string_gt.c_str());
+              sequence++;
+          }
+              break;
+          case 7:{
+              qw = (double)atof(string_gt.c_str());
+              sequence++;
+          }
+              break;
+          default:
+              break;
+        }
       }
       Eigen::Quaterniond qt(qw,qx,qy,qz);
       rm = qt.toRotationMatrix();
@@ -385,8 +389,6 @@ void NID::ComputeHref(){
     H_ref_ -= pro_ref_[i] * log2(pro_ref_[i]);
   }
   
-  //std::cout<<"H_ref from original definition "<<H_ref_<<std::endl;
-  
 };
 
 
@@ -438,11 +440,14 @@ void NID::ComputeH(){
     
   }
 
+
   //if too many points are out of image boundary, we don't use this edge
   if(intensity0_.rows() - ob < 300){
+    //std::cout<<"no enough points in the image boundary"<<std::endl;
     return;
   }
 
+  //pro_last_.size() = bin_num
   for(int i = 0; i < bin_num_ ; i++){
     pro_current_[i] /= (intensity0_.rows() - ob);
   }
@@ -468,6 +473,8 @@ void NID::ComputeH(){
     nid_ = (2*H_joint_ - H_ref_ - H_current_)/H_joint_;
     MI_ = H_ref_ + H_current_ - H_joint_;
     
+    //if all points from one image is mapped into only one bin so that one of the pro_current_[i] == 1, then H_currrent and H_joint will be 0;
+    //For example, if we have 3 bins, pro_ref is 0 1 0, pro_current is 0 1 0 (or 0 0 1, 1 0 0), then H_ref and current will be 0. Notice we can totally infer one image's state from another. For this perfect matching, we should count the cost as 0
     if(H_ref_ == 0.0 && H_current_ == 0.0 && H_joint_ == 0.0){
       MI_ = 0.0;
       nid_ = 0.0;

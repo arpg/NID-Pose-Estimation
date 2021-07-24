@@ -369,178 +369,173 @@ void EdgeStereoSE3ProjectXYZOnlyPose::linearizeOplus() {
 
 /***Add by zhaozhong chen**/
 bool EdgeSE3ProjectIntensityOnlyPoseNID::read(std::istream& is){
-  // for (int i=0; i<2; i++){
-  //   is >> _measurement[i];
-  // }
-  // for (int i=0; i<2; i++)
-  //   for (int j=i; j<2; j++) {
-  //     is >> information()(i,j);
-  //     if (i!=j)
-  //       information()(j,i)=information()(i,j);
-  //   }
   return true;
 }
 
 bool EdgeSE3ProjectIntensityOnlyPoseNID::write(std::ostream& os) const {
 
-  // for (int i=0; i<2; i++){
-  //   os << measurement()[i] << " ";
-  // }
-
-  // for (int i=0; i<2; i++)
-  //   for (int j=i; j<2; j++){
-  //     os << " " <<  information()(i,j);
-  //   }
   return os.good();
 }
 
 
 void EdgeSE3ProjectIntensityOnlyPoseNID::linearizeOplus() {
-  //std::cout<<"in g2o compute jacobian.............."<<std::endl;
-  VertexSE3Expmap * vi = static_cast<VertexSE3Expmap *>(_vertices[0]);
-  Eigen::VectorXd obs(_measurement);
-  
-  std::vector<std::vector<double> > d_sum_bs_pose(bin_num_, std::vector<double>(6, 0.0));
 
-  //bin_num * bin_num * 6 dimension
-  std::vector<std::vector<std::vector<double> > > d_sum_joint_bs_pose(bin_num_, std::vector<std::vector<double> >(bin_num_, std::vector<double>(6,0.0)));
-
-  //derivative, mappde intensity to intensity to 
-  double d_mi_i = (bin_num_- bs_degree_)/255.0;
-
-  for(int i = 0 ; i<_measurement.rows(); i++){
-
-    Eigen::Vector3d p_c = vi->estimate().map ( x_world_set_[i] );
-
-    if(obs(i,0) >= 255)
-      obs(i,0) = 254.999;
-    if(obs(i,0) < 0)
-      obs(i, 0) = 0.0;
+  if(use_CPU_){
+    VertexSE3Expmap * vi = static_cast<VertexSE3Expmap *>(_vertices[0]);
+    Eigen::VectorXd obs(_measurement);
     
-    double bin_pos_ref =  obs(i,0)* (bin_num_- bs_degree_)/255.0;
-    int bins_index_ref = floor(bin_pos_ref);
+    std::vector<std::vector<double> > d_sum_bs_pose(bin_num_, std::vector<double>(6, 0.0));
 
-    double u_c =  p_c(0,0)/p_c(2,0);
-    double v_c =  p_c(1,0)/p_c(2,0);
+    //bin_num * bin_num * 6 dimension
+    std::vector<std::vector<std::vector<double> > > d_sum_joint_bs_pose(bin_num_, std::vector<std::vector<double> >(bin_num_, std::vector<double>(6,0.0)));
 
-    double x = p_c(0,0);
-    double y = p_c(1,0);
-    double invz = 1.0/p_c(2,0);
-    double invz_2 = invz*invz;
+    //derivative, mappde intensity to intensity to 
+    double d_mi_i = (bin_num_- bs_degree_)/255.0;
 
-    // jacobian from se3 to u,v
-    // NOTE that in g2o the Lie algebra is (\omega, \epsilon), where \omega is so(3) and \epsilon the translation
-    Eigen::Matrix<double, 2, 6> jacobian_uv_ksai;
+    for(int i = 0 ; i<_measurement.rows(); i++){
 
+      Eigen::Vector3d p_c = vi->estimate().map ( x_world_set_[i] );
 
-    //2d pixel position in l frame
-    double u = fx_ * u_c + cx_;
-    double v = fy_ * v_c + cy_;
+      if(obs(i,0) >= 255)
+        obs(i,0) = 254.999;
+      if(obs(i,0) < 0)
+        obs(i, 0) = 0.0;
+      
+      double bin_pos_ref =  obs(i,0)* (bin_num_- bs_degree_)/255.0;
+      int bins_index_ref = floor(bin_pos_ref);
 
-    double bin_pos_current =  intensity_current_(i,0)* (bin_num_-3.0)/255.0;
-    double pos_cubic_current = bin_pos_current * bin_pos_current * bin_pos_current;
-    double pos_qua_current  = bin_pos_current * bin_pos_current;
-    int bins_index_current = floor(bin_pos_current);
+      double u_c =  p_c(0,0)/p_c(2,0);
+      double v_c =  p_c(1,0)/p_c(2,0);
 
-    double gradient_x, gradient_y;
+      double x = p_c(0,0);
+      double y = p_c(1,0);
+      double invz = 1.0/p_c(2,0);
+      double invz_2 = invz*invz;
 
-    Eigen::Matrix<double, 1, 2> jacobian_pixel_uv;
-    //calculate the four corner pixel's gradient and do bilinear inerpolation
-    if(u >= 0 && u+3 <= image1_.cols - 1 && v >= 0 && v+3 <= image1_.rows){
-      jacobian_pixel_uv ( 0,0 ) = ( get_interpolated_pixel_value ( u+1,v )-get_interpolated_pixel_value ( u-1,v ) ) /2;
-      jacobian_pixel_uv ( 0,1 ) = ( get_interpolated_pixel_value ( u,v+1 )-get_interpolated_pixel_value ( u,v-1 ) ) /2;
-
-      jacobian_uv_ksai ( 0,0 ) = - x*y*invz_2 *fx_;
-      jacobian_uv_ksai ( 0,1 ) = ( 1+ ( x*x*invz_2 ) ) *fx_;
-      jacobian_uv_ksai ( 0,2 ) = - y*invz *fx_;
-      jacobian_uv_ksai ( 0,3 ) = invz *fx_;
-      jacobian_uv_ksai ( 0,4 ) = 0;
-      jacobian_uv_ksai ( 0,5 ) = -x*invz_2 *fx_;
-
-      jacobian_uv_ksai ( 1,0 ) = - ( 1+y*y*invz_2 ) *fy_;
-      jacobian_uv_ksai ( 1,1 ) = x*y*invz_2 *fy_;
-      jacobian_uv_ksai ( 1,2 ) = x*invz *fy_;
-      jacobian_uv_ksai ( 1,3 ) = 0;
-      jacobian_uv_ksai ( 1,4 ) = invz *fy_;
-      jacobian_uv_ksai ( 1,5 ) = -y*invz_2 *fy_;
-    }
-    else{
-      jacobian_pixel_uv ( 0,0 ) = 0.0;
-      jacobian_pixel_uv ( 0,1 ) = 0.0;
-      jacobian_uv_ksai = Eigen::Matrix<double, 2, 6>::Zero();
-      continue;
-    }
-    
-    Eigen::Matrix<double, 1, 6> d_i_pose;
-    d_i_pose = jacobian_pixel_uv * jacobian_uv_ksai;
+      // jacobian from se3 to u,v
+      // NOTE that in g2o the Lie algebra is (\omega, \epsilon), where \omega is so(3) and \epsilon the translation
+      Eigen::Matrix<double, 2, 6> jacobian_uv_ksai;
 
 
-    Eigen::MatrixXd sum_d_i_pose = Eigen::MatrixXd::Zero(6,1);//sum of derivatives of intensity to pose
+      //2d pixel position in l frame
+      double u = fx_ * u_c + cx_;
+      double v = fy_ * v_c + cy_;
 
+      double bin_pos_current =  intensity_current_(i,0)* (bin_num_-3.0)/255.0;
+      double pos_cubic_current = bin_pos_current * bin_pos_current * bin_pos_current;
+      double pos_qua_current  = bin_pos_current * bin_pos_current;
+      int bins_index_current = floor(bin_pos_current);
 
-    std::vector<double> d_bs_mi(bin_num_, 0.0);
+      double gradient_x, gradient_y;
 
-    //Checked when bin position in (0,1) (2,3) (3,4), all correct
-    d_bs_mi[bins_index_current]     = BsplineDer(bins_index_current, bs_degree_+1, bins_index_current);
-    d_bs_mi[bins_index_current + 1] = BsplineDer(bins_index_current+1, bs_degree_+1, bins_index_current);
-    d_bs_mi[bins_index_current + 2] = BsplineDer(bins_index_current+2, bs_degree_+1, bins_index_current);
-    d_bs_mi[bins_index_current + 3] = BsplineDer(bins_index_current+3, bs_degree_+1, bins_index_current);
+      Eigen::Matrix<double, 1, 2> jacobian_pixel_uv;
+      //calculate the four corner pixel's gradient and do bilinear inerpolation
+      if(u >= 0 && u+3 <= image1_.cols - 1 && v >= 0 && v+3 <= image1_.rows){
+        jacobian_pixel_uv ( 0,0 ) = ( get_interpolated_pixel_value ( u+1,v )-get_interpolated_pixel_value ( u-1,v ) ) /2;
+        jacobian_pixel_uv ( 0,1 ) = ( get_interpolated_pixel_value ( u,v+1 )-get_interpolated_pixel_value ( u,v-1 ) ) /2;
+        //std::cout<<"gradient x and y "<<gradient_x<<", "<<gradient_y<<std::endl;
 
-    for(int m = 0; m<bs_degree_+1; m++)
-      for(int n = 0; n<6; n++){
-        d_sum_bs_pose[bins_index_current + m][n] += d_bs_mi[bins_index_current + m] * d_mi_i * d_i_pose(0,n);
+        jacobian_uv_ksai ( 0,0 ) = - x*y*invz_2 *fx_;
+        jacobian_uv_ksai ( 0,1 ) = ( 1+ ( x*x*invz_2 ) ) *fx_;
+        jacobian_uv_ksai ( 0,2 ) = - y*invz *fx_;
+        jacobian_uv_ksai ( 0,3 ) = invz *fx_;
+        jacobian_uv_ksai ( 0,4 ) = 0;
+        jacobian_uv_ksai ( 0,5 ) = -x*invz_2 *fx_;
+
+        jacobian_uv_ksai ( 1,0 ) = - ( 1+y*y*invz_2 ) *fy_;
+        jacobian_uv_ksai ( 1,1 ) = x*y*invz_2 *fy_;
+        jacobian_uv_ksai ( 1,2 ) = x*invz *fy_;
+        jacobian_uv_ksai ( 1,3 ) = 0;
+        jacobian_uv_ksai ( 1,4 ) = invz *fy_;
+        jacobian_uv_ksai ( 1,5 ) = -y*invz_2 *fy_;
       }
+      else{
+        jacobian_pixel_uv ( 0,0 ) = 0.0;
+        jacobian_pixel_uv ( 0,1 ) = 0.0;
+        jacobian_uv_ksai = Eigen::Matrix<double, 2, 6>::Zero();
+        continue;
+      }
+      
+      Eigen::Matrix<double, 1, 6> d_i_pose;
+      d_i_pose = jacobian_pixel_uv * jacobian_uv_ksai;
 
-    for(int k = 0; k<bs_degree_+1; k++)
+
+      std::vector<double> d_bs_mi(bin_num_, 0.0);
+
+      //Checked when bin position in (0,1) (2,3) (3,4), all correct
+      //std::cout<<"measurement is "<<hg_intensity_last_(i,0)<<", bin position is "<<bin_pos_last<<std::endl;
+      d_bs_mi[bins_index_current]     = BsplineDer(bins_index_current, bs_degree_+1, bin_pos_current);//bins_index_current
+      d_bs_mi[bins_index_current + 1] = BsplineDer(bins_index_current+1, bs_degree_+1, bin_pos_current);
+      d_bs_mi[bins_index_current + 2] = BsplineDer(bins_index_current+2, bs_degree_+1, bin_pos_current);
+      d_bs_mi[bins_index_current + 3] = BsplineDer(bins_index_current+3, bs_degree_+1, bin_pos_current);
+
+
       for(int m = 0; m<bs_degree_+1; m++)
         for(int n = 0; n<6; n++){
-          d_sum_joint_bs_pose[bins_index_ref + k][bins_index_current + m][n] += bs_value_ref_(i,k) * d_bs_mi[bins_index_current + m] * d_mi_i * d_i_pose[n];
+          d_sum_bs_pose[bins_index_current + m][n] += d_bs_mi[bins_index_current + m] * d_mi_i * d_i_pose(0,n);
         }
-  }
 
-  for(int m = 0; m<bin_num_; m++)
-    for(int n = 0; n<6; n++){
-      d_sum_bs_pose[m][n] /= (_measurement.rows() - ob);
-  }
+      for(int k = 0; k<bs_degree_+1; k++)
+        for(int m = 0; m<bs_degree_+1; m++)
+          for(int n = 0; n<6; n++){
+            d_sum_joint_bs_pose[bins_index_ref + k][bins_index_current + m][n] += bs_value_ref_(i,k) * d_bs_mi[bins_index_current + m] * d_mi_i * d_i_pose[n];
+          }
+    }
 
-  for(int m = 0; m<bin_num_; m++)
-    for(int n = 0; n<bin_num_; n++)
-      for(int k = 0; k<6; k++){
-        d_sum_joint_bs_pose[m][n][k] /= (_measurement.rows() - ob);
+    
+    for(int m = 0; m<bin_num_; m++)
+      for(int n = 0; n<6; n++){
+        d_sum_bs_pose[m][n] /= (_measurement.rows() - ob);
+    }
+
+    for(int m = 0; m<bin_num_; m++)
+      for(int n = 0; n<bin_num_; n++)
+        for(int k = 0; k<6; k++){
+          d_sum_joint_bs_pose[m][n][k] /= (_measurement.rows() - ob);
+        }
+
+    //derivative H_joint to pose
+    std::vector<double> d_hj_p(6, 0.0);
+    for(int i = 0; i < 6; i++){
+      double tmp = 0.0;
+      for(int m = 0; m<bin_num_; m++){
+        for(int n = 0; n<bin_num_; n++){
+          if(pro_joint_[m][n] < sigma_)
+            continue;
+          tmp -= (1.0 + log2(pro_joint_[m][n])) * d_sum_joint_bs_pose[m][n][i];
+        }
       }
+      d_hj_p[i] = tmp;
+    }  
 
-  //derivative H_joint to pose
-  std::vector<double> d_hj_p(6, 0.0);
-  for(int i = 0; i < 6; i++){
-    double tmp = 0.0;
-    for(int m = 0; m<bin_num_; m++){
-      for(int n = 0; n<bin_num_; n++){
-        if(pro_joint_[m][n] < sigma_)
+    //derivative H_last_ to pose
+    std::vector<double> d_hl_p(6, 0.0);
+    for(int i = 0; i < 6; i++){
+      for(int j = 0; j < bin_num_; j++){
+        if(pro_current_[j] < sigma_)
           continue;
-        tmp -= (1.0 + log2(pro_joint_[m][n])) * d_sum_joint_bs_pose[m][n][i];
+        d_hl_p[i] -= (1.0 + log2(pro_current_[j])) * d_sum_bs_pose[j][i];
       }
     }
-    d_hj_p[i] = tmp;
-  }  
 
-  //derivative H_last_ to pose
-  std::vector<double> d_hl_p(6, 0.0);
-  for(int i = 0; i < 6; i++){
-    for(int j = 0; j < bin_num_; j++){
-      if(pro_current_[j] < sigma_)
-        continue;
-      d_hl_p[i] -= (1.0 + log2(pro_current_[j])) * d_sum_bs_pose[j][i];
-    }
+    double inv_square_hj = 1.0/(H_joint_ * H_joint_);
+    
+    _jacobianOplusXi(0,0) = (d_hj_p[0] * (H_current_ + H_ref_) - d_hl_p[0] * H_joint_) * inv_square_hj;
+    _jacobianOplusXi(0,1) = (d_hj_p[1] * (H_current_ + H_ref_) - d_hl_p[1] * H_joint_) * inv_square_hj;
+    _jacobianOplusXi(0,2) = (d_hj_p[2] * (H_current_ + H_ref_) - d_hl_p[2] * H_joint_) * inv_square_hj; 
+    _jacobianOplusXi(0,3) = (d_hj_p[3] * (H_current_ + H_ref_) - d_hl_p[3] * H_joint_) * inv_square_hj; 
+    _jacobianOplusXi(0,4) = (d_hj_p[4] * (H_current_ + H_ref_) - d_hl_p[4] * H_joint_) * inv_square_hj; 
+    _jacobianOplusXi(0,5) = (d_hj_p[5] * (H_current_ + H_ref_) - d_hl_p[5] * H_joint_) * inv_square_hj;
   }
-
-  double inv_square_hj = 1.0/(H_joint_ * H_joint_);
-  
-  _jacobianOplusXi(0,0) = (d_hj_p[0] * (H_current_ + H_ref_) - d_hl_p[0] * H_joint_) * inv_square_hj;
-  _jacobianOplusXi(0,1) = (d_hj_p[1] * (H_current_ + H_ref_) - d_hl_p[1] * H_joint_) * inv_square_hj;
-  _jacobianOplusXi(0,2) = (d_hj_p[2] * (H_current_ + H_ref_) - d_hl_p[2] * H_joint_) * inv_square_hj; 
-  _jacobianOplusXi(0,3) = (d_hj_p[3] * (H_current_ + H_ref_) - d_hl_p[3] * H_joint_) * inv_square_hj; 
-  _jacobianOplusXi(0,4) = (d_hj_p[4] * (H_current_ + H_ref_) - d_hl_p[4] * H_joint_) * inv_square_hj; 
-  _jacobianOplusXi(0,5) = (d_hj_p[5] * (H_current_ + H_ref_) - d_hl_p[5] * H_joint_) * inv_square_hj;
+  else{
+    //GPU has already calculated the required value
+    _jacobianOplusXi(0,0) = j0_;
+    _jacobianOplusXi(0,1) = j1_;
+    _jacobianOplusXi(0,2) = j2_;
+    _jacobianOplusXi(0,3) = j3_;
+    _jacobianOplusXi(0,4) = j4_;
+    _jacobianOplusXi(0,5) = j5_;
+  }
   
 
 }
@@ -567,7 +562,6 @@ void EdgeSE3ProjectIntensityOnlyPoseNID::ComputeH(){
     double u = fx_ * p_c(0,0) / p_c(2,0) + cx_;
     double v = fy_ * p_c(1,0) / p_c(2,0) + cy_;
 
-    //bilinear interporlation of pixel. DSO getInterpolatedElement33() function, bilinear interpolation
     if(u >= 0 && u+3 <= image1_.cols && v >= 0 && v+3 <= image1_.rows){
       intensity_current_(i,0) = get_interpolated_pixel_value(u,v);
     }
@@ -579,6 +573,7 @@ void EdgeSE3ProjectIntensityOnlyPoseNID::ComputeH(){
       intensity_current_(i,0) = 254.999;
     if(intensity_current_(i,0) < 0)
       intensity_current_(i, 0) = 0.0;
+
 
     //last frame mutual information probability
     double bin_pos_current = intensity_current_(i,0)* (bin_num_-3.0)/255.0;
@@ -599,7 +594,6 @@ void EdgeSE3ProjectIntensityOnlyPoseNID::ComputeH(){
     pro_current_[bins_index_current+1] += bs_value1_current;
     pro_current_[bins_index_current+2] += bs_value2_current;
     pro_current_[bins_index_current+3] += bs_value3_current;
-
     
     //(bs_degree + 1) * (bs_degree + 1) combination
     for(int m = 0 ; m<bs_degree_+1; m++)
@@ -609,12 +603,15 @@ void EdgeSE3ProjectIntensityOnlyPoseNID::ComputeH(){
     
   }
 
+  //std::cout<<"final ob is "<<ob<<std::endl;
+
   //if too many points are out of image boundary, we don't use this edge
   if(obs.rows() - ob < 300){
     this->setLevel(1);
     return;
   }
-
+  
+  //pro_last_.size() = bin_num
   for(int i = 0; i < bin_num_ ; i++){
     pro_current_[i] /= (obs.rows() - ob);
   }
@@ -666,6 +663,7 @@ void EdgeSE3ProjectIntensityOnlyPoseNID::computeHref(){
 
     Eigen::Vector3d p_c = v1->estimate().map ( x_world_set_[i] );
 
+
     //2d pixel position in current frame
     double u = fx_ * p_c(0,0) / p_c(2,0) + cx_;
     double v = fy_ * p_c(1,0) / p_c(2,0) + cy_;
@@ -678,8 +676,6 @@ void EdgeSE3ProjectIntensityOnlyPoseNID::computeHref(){
       ob++;
       continue;
     }
-
-    //decide if there is a valid mapping first, or we won't count this pixel
 
     //current frame mutual information probability
     if(obs(i,0) >= 255)
@@ -708,6 +704,7 @@ void EdgeSE3ProjectIntensityOnlyPoseNID::computeHref(){
     pro_ref_[bins_index_ref+1] += bs_value1_ref;
     pro_ref_[bins_index_ref+2] += bs_value2_ref;
     pro_ref_[bins_index_ref+3] += bs_value3_ref;
+
   }
 
   if(obs.rows() - ob < 300){
@@ -724,7 +721,6 @@ void EdgeSE3ProjectIntensityOnlyPoseNID::computeHref(){
       continue;
     H_ref_ -= pro_ref_[i] * log2(pro_ref_[i]);
   }
-
   
 };
 
@@ -801,6 +797,48 @@ double EdgeSE3ProjectIntensityOnlyPoseNID::BsplineDer(int index, int order, doub
     
     return ( coef1 * BsplineDer(index, order-1, u) + coef2 * BsplineDer(index+1, order-1 ,u) + coef3 * Bspline(index, order-1, u) + coef4 * Bspline(index+1, order-1 ,u) );
   }
+};
+
+bool EdgeSE3ProjectIntensityOnlyPoseNID::setHref(int cell_size, int cell_row_id, int cell_col_id, int rows, int cols, double* bs_value, int* bin_index){
+    int row_block = rows / cell_size;
+    int col_block = cols / cell_size;
+    int row_start = row_block * cell_row_id;
+    int col_start = col_block * cell_col_id;
+    int row_end = row_block * (cell_row_id + 1);
+    int col_end = col_block * (cell_col_id + 1);
+
+    int counter = 0;
+
+    pro_ref_ = std::vector<double>(bin_num_,0.0);
+    H_ref_ = 0.0;
+    
+    for(int i = row_start; i < row_end; i++)
+        for(int j = col_start; j < col_end; j++){
+          int id = i * cols + j;
+          int bi = bin_index[id];
+          if(!isnan(bs_value[4*id])){
+            counter++;
+            pro_ref_[bi] += bs_value[4*id];
+            pro_ref_[bi+1] += bs_value[4*id+1];
+            pro_ref_[bi+2] += bs_value[4*id+2];
+            pro_ref_[bi+3] += bs_value[4*id+3];
+          }
+        }
+
+    if(counter < 300){
+      this->setLevel(1);
+      return false;
+    }
+
+    for(int i = 0; i < bin_num_ ; i++){
+      pro_ref_[i] /= counter;
+    }
+  
+    for(int i = 0; i < bin_num_ ; i++){
+      if(pro_ref_[i] < sigma_)
+        continue;
+      H_ref_ -= pro_ref_[i] * log2(pro_ref_[i]);
+    }
 };
 
 void EdgeSE3ProjectDirectOnlyPose::linearizeOplus(){

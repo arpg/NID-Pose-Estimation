@@ -28,6 +28,7 @@
 #define G2O_OPTIMIZATION_ALGORITHM_WITH_HESSIAN_H
 
 #include "optimization_algorithm.h"
+#include "computeH.cuh"
 
 namespace g2o {
 

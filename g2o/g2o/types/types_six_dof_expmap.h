@@ -218,14 +218,22 @@ public:
   bool write(std::ostream& os) const;
 
   void computeError() {
+    if(use_CPU_){
+      ClearPrevH();
 
-    ClearPrevH();
+      ComputeH();
+    }
 
-    ComputeH();
+    _error(0,0) = (2*H_joint_ - H_ref_ - H_current_)/H_joint_; //-cam_project(v1->estimate().map(Xw));
+  }
 
-    //if nan value happens, normally it means all the pixel is the last image is mapped to the outside of the current image
-    _error(0,0) = (2*H_joint_ - H_ref_ - H_current_)/H_joint_;
+  inline double* get_current_pose(){
+    VertexSE3Expmap * vi = static_cast<VertexSE3Expmap *>(_vertices[0]);
+    return vi->estimate().to_homogeneous_matrix().data();
+  }
 
+  inline void set_href(double Href){
+    H_ref_ = Href;
   }
 
   void set_bspline_relates(int bs_degree, int bin_num);
@@ -236,9 +244,13 @@ public:
 
   void ClearPrevH();
 
+  bool setHref(int cell_size, int cell_row_id, int cell_col_id, int rows, int cols, double* bs_value, int* bin_index);
+
   virtual void linearizeOplus();
 
   double fx_, fy_, cx_, cy_;
+
+  double j0_,j1_,j2_,j3_,j4_,j5_;
 
   Eigen::VectorXd intensity_current_;
   std::vector<cv::KeyPoint> hg_points_;
@@ -252,17 +264,46 @@ public:
 
   double H_current_ = 0.0, H_ref_ = 0.0, H_joint_ = 0.0;
 
+  //current intensity probability in each b spline function, last image intensity probability in each b spline function, derivate of last frame to mapped intensity (pixel intensity is mapped from 0~255 to (bin_num - bs_degree) )
   std::vector<double> pro_current_, pro_ref_;
   //joint pobability of b spline function
   std::vector<std::vector<double> > pro_joint_;
   int bs_degree_;
   int bin_num_;
+  //pixel location in one dimension
+  std::vector<int> pixel_location_;
+
+  bool use_CPU_ = false;
+
 
   int ob = 0; //mapped points that are out of image boundary
 
   double sigma_ = 1e-30;
 
-  std::vector<double> knots_;
+  //8 bin, 4 order
+  //double knots_[12] = { 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 5.0, 5.0, 5.0};
+
+  //10 bins, 4 order
+  double knots_[14] = { 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 7.0, 7.0, 7.0};
+
+  //6 bins, 4 order
+  //double knots_[10] = { 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 3.0, 3.0, 3.0, 3.0};
+
+  //12 bins, 4 order
+  //double knots_[16] = { 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 9.0, 9.0, 9.0};
+
+  //14 bins, 4 order
+  //double knots_[18] = { 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 11.0, 11.0, 11.0};
+
+  void set_h(double Htarget, double Hjoint){
+    H_current_ = Htarget;
+    H_joint_ = Hjoint;
+    //printf("the Ht, Hj we set is .................%f,%f", H_current_, H_joint_);
+  }
+
+  void set_j(double j0, double j1, double j2, double j3, double j4, double j5){
+    j0_ = j0; j1_ = j1 ; j2_ = j2 ;j3_ = j3;j4_ = j4; j5_ = j5;
+  }
 
 private:
   // get a gray scale value from reference image (bilinear interpolated)

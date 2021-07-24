@@ -28,6 +28,7 @@
 #include <Eigen/LU>
 #include <fstream>
 #include <iomanip>
+#include <chrono>
 
 #include "../stuff/timeutil.h"
 #include "../stuff/macros.h"
@@ -526,8 +527,13 @@ bool BlockSolver<Traits>::buildSystem()
   JacobianWorkspace jacobianWorkspace = _optimizer->jacobianWorkspace();
 # pragma omp parallel for default (shared) firstprivate(jacobianWorkspace) if (_optimizer->activeEdges().size() > 100)
 # endif
-  for (int k = 0; k < static_cast<int>(_optimizer->activeEdges().size()); ++k) {
+  //printf("do linearize...........................................\n");
+  //std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
+
+  for (int k = 0, m = 0; k < static_cast<int>(_optimizer->activeEdges().size()); ++k, m++) {
     OptimizableGraph::Edge* e = _optimizer->activeEdges()[k];
+    while(isnan(der_[6*m])) m++;
+    e->set_j(der_[6*m],der_[6*m+1],der_[6*m+2],der_[6*m+3],der_[6*m+4],der_[6*m+5]);
     e->linearizeOplus(jacobianWorkspace); // jacobian of the nodes' oplus (manifold)
     e->constructQuadraticForm();
 #  ifndef NDEBUG
@@ -543,6 +549,10 @@ bool BlockSolver<Traits>::buildSystem()
     }
 #  endif
   }
+  //std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
+  //std::chrono::duration<double, std::milli> time_span = t2 - t1;
+  //printf("Costs %f ms to calculate the jacobian value, CPU \n", time_span.count());
+  //printf("finish computing jacobian...........................................with edge numbre %d \n", counter);
 
   // flush the current system in a sparse block matrix
 # ifdef G2O_OPENMP

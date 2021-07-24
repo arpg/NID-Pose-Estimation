@@ -33,7 +33,13 @@
 #include "sparse_block_matrix.h"
 #include "batch_stats.h"
 
+#include "computeH.cuh"
+
 #include <map>
+
+#include <chrono>
+//new add, to access the to be estimated estimate matrix
+#include "../types/types_six_dof_expmap.h"
 
 namespace g2o {
 
@@ -252,6 +258,8 @@ namespace g2o {
      */
     void computeActiveErrors();
 
+    void set_h_pointer(double* h_target, double* h_joint);
+
     /**
      * Linearizes the system by computing the Jacobians for the nodes
      * and edges in the graph
@@ -287,6 +295,23 @@ namespace g2o {
     //! remove an action that should no longer be execured before computing the error vectors
     bool removeComputeErrorAction(HyperGraphAction* action);
 
+    //for image entropy computation
+    double* Href_;
+    double* im0_;
+    double* im1_;
+    double* points3d_;
+    double* camera_intrincis_;
+    int bin_num_;
+    int bs_degree_;
+    int cell_num_;
+    int rows_;
+    int cols_;
+    double* bs_value_ref_; 
+    int* bs_index_ref_;
+    int* bs_counter_;
+    double* h_target_;
+    double* h_joint_;
+    
     
 
     protected:

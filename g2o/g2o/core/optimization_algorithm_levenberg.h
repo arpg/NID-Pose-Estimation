@@ -29,6 +29,10 @@
 
 #include "optimization_algorithm_with_hessian.h"
 
+//new add, to access the to be estimated estimate matrix
+#include "../types/types_six_dof_expmap.h"
+
+
 namespace g2o {
 
   /**

@@ -70,8 +70,10 @@ namespace g2o{
 #   ifdef G2O_OPENMP
 #   pragma omp parallel for default (shared) if (_activeEdges.size() > 50)
 #   endif
-    for (int k = 0; k < static_cast<int>(_activeEdges.size()); ++k) {
+    for (int k = 0, n = 0; k < static_cast<int>(_activeEdges.size()); ++k, ++n) {
       OptimizableGraph::Edge* e = _activeEdges[k];
+      while( isnan(h_target_[n]) || isnan(h_joint_[n]) ) n++;
+      e->set_h(h_target_[n], h_joint_[n]);
       e->computeError();
     }
 
@@ -353,6 +355,7 @@ namespace g2o{
 
   int SparseOptimizer::optimize(int iterations, bool online)
   {
+
     if (_ivMap.size() == 0) {
       cerr << __PRETTY_FUNCTION__ << ": 0 vertices to optimize, maybe forgot to call initializeOptimization()" << endl;
       return -1;
@@ -390,20 +393,44 @@ namespace g2o{
       double ts = get_monotonic_time();
       result = _algorithm->solve(i, online);
       ok = ( result == OptimizationAlgorithm::OK );
-
+      
       bool errorComputed = false;
       if (_computeBatchStatistics) {
-        computeActiveErrors();
+        computeActiveErrors();//this computeActiveErrors is not used
         errorComputed = true;
         _batchStatistics[i].chi2 = activeRobustChi2();
         _batchStatistics[i].timeIteration = get_monotonic_time()-ts;
       }
-
       if (verbose()){
         double dts = get_monotonic_time()-ts;
         cumTime += dts;
-        if (! errorComputed)
+        if (! errorComputed){
+          int bin_cell = cell_num_* cell_num_*cell_num_;
+          double* Htarget  = (double*)malloc(cell_num_*cell_num_*sizeof(double));
+          double* Hjoint   = (double*)malloc(cell_num_*cell_num_*sizeof(double));
+          double* pro_target  = (double*)malloc(bin_cell*sizeof(double));
+          double* pro_joint   = (double*)malloc(bin_cell*bin_cell*sizeof(double));
+          double* der;
+          memset(Htarget,0,cell_num_*cell_num_*sizeof(double));
+          memset(Hjoint,0,cell_num_*cell_num_*sizeof(double));
+          double* intrinscis = (double*)malloc(5*sizeof(double));
+
+          memset(Htarget,0,cell_num_*cell_num_*sizeof(double));
+          memset(Hjoint,0,cell_num_*cell_num_*sizeof(double));
+
+          auto v1 = activeVertices();
+          VertexSE3Expmap * vn = static_cast<VertexSE3Expmap *>(v1[0]);
+          CudaComputeH(false, im0_, im1_, points3d_, bs_counter_, bs_value_ref_, bs_index_ref_, vn->estimate().to_homogeneous_matrix().data(), camera_intrincis_, bin_num_, bs_degree_, cell_num_, rows_, cols_ , Href_, pro_target, pro_joint, Htarget, Hjoint, der);
+
+          set_h_pointer(Htarget, Hjoint);
           computeActiveErrors();
+
+          //free after computing jacobian
+          free(Htarget);
+          free(Hjoint);
+          free(pro_target);
+          free(pro_joint);
+        }
         cerr << "iteration= " << i
           << "\t chi2= " << FIXED(activeRobustChi2())
           << "\t time= " << dts
@@ -478,8 +505,6 @@ namespace g2o{
       }
     }
 
-    //if (newVertices.size() != vset.size())
-    //cerr << __PRETTY_FUNCTION__ << ": something went wrong " << PVAR(vset.size()) << " " << PVAR(newVertices.size()) << endl;
     return _algorithm->updateStructure(newVertices, eset);
   }
 
@@ -619,5 +644,10 @@ namespace g2o{
   const double* SparseOptimizer::activeRobustChi2His() const{
     return robustchi2_his_.data();
   };
+
+  void SparseOptimizer::set_h_pointer(double* h_target, double* h_joint){
+    h_target_ = h_target;
+    h_joint_  = h_joint;
+  }
 
 } // end namespace

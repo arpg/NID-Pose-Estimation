@@ -393,6 +393,10 @@ namespace g2o {
         // computes the error of the edge and stores it in an internal structure
         virtual void computeError() = 0;
 
+        //Set H and Hjoint value for the edges
+        virtual void set_h(double Htarget, double Hjoint);
+        virtual void set_j(double j0, double j1, double j2, double j3, double j4, double j5);
+
         //! sets the measurement from an array of double
         //! @returns true on success
         virtual bool setMeasurementData(const double* m);

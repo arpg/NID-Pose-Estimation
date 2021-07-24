@@ -1,0 +1,1 @@
+./bin/NID_pose_estimation config_eth_cvg.yaml

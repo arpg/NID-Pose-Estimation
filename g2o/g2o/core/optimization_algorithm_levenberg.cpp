@@ -71,8 +71,50 @@ namespace g2o {
       }
     }
 
+
+    auto v0 = _optimizer->activeVertices();
+    VertexSE3Expmap * vm = static_cast<VertexSE3Expmap *>(v0[0]);
+
+    int bin_cell = _optimizer->bin_num_* _optimizer->cell_num_*_optimizer->cell_num_;
+    int cell_num_2 = _optimizer->cell_num_*_optimizer->cell_num_;
+    double* Htarget  = (double*)malloc(cell_num_2*sizeof(double));
+    double* Hjoint   = (double*)malloc(cell_num_2*sizeof(double));
+    double* pro_target  = (double*)malloc(bin_cell*sizeof(double));
+    double* pro_joint   = (double*)malloc(bin_cell*bin_cell*sizeof(double));
+    double* der = (double*)malloc(6*cell_num_2*sizeof(double));
+    int* edge_active_flag = (int*)malloc(cell_num_2*sizeof(int));
+    memset(edge_active_flag,0,cell_num_2*sizeof(int));
+    memset(Htarget,0,cell_num_2*sizeof(double));
+    memset(Hjoint,0,cell_num_2*sizeof(double));
+    double* intrinscis = (double*)malloc(5*sizeof(double));
+
+    auto ac_edges = _optimizer->activeEdges();
+    //std::cout<<"active edges number ..... "<<ac_edges.size()<<std::endl;
+    for(auto edge:ac_edges){
+      int e_id = edge->internalId();
+      edge_active_flag[e_id] = 1;
+    }
+
+    CudaComputeH(true, _optimizer->im0_, _optimizer->im1_, _optimizer->points3d_, _optimizer->bs_counter_, _optimizer->bs_value_ref_, _optimizer->bs_index_ref_, vm->estimate().to_homogeneous_matrix().data(), _optimizer->camera_intrincis_, _optimizer->bin_num_, _optimizer->bs_degree_, _optimizer->cell_num_, _optimizer->rows_, _optimizer->cols_ , _optimizer->Href_, pro_target, pro_joint, Htarget, Hjoint, der);
+
+    for(int i = 0; i<cell_num_2; i++){
+      if(!edge_active_flag[i]){
+        Htarget[i] == NAN;
+        Hjoint[i] == NAN;
+        der[6*i] == NAN;
+        der[6*i+1] == NAN;
+        der[6*i+2] == NAN;
+        der[6*i+3] == NAN;
+        der[6*i+4] == NAN;
+        der[6*i+5] == NAN;
+      }
+    }
+
     double t=get_monotonic_time();
+    _optimizer->set_h_pointer(Htarget, Hjoint);
     _optimizer->computeActiveErrors();
+
+
     G2OBatchStatistics* globalStats = G2OBatchStatistics::globalStats();
     if (globalStats) {
       globalStats->timeResiduals = get_monotonic_time()-t;
@@ -83,8 +125,10 @@ namespace g2o {
     double tempChi=currentChi;
 
     double iniChi = currentChi;
-
+    _solver->set_j_bs(der);
     _solver->buildSystem();
+
+
     if (globalStats) {
       globalStats->timeQuadraticForm = get_monotonic_time()-t;
     }
@@ -95,7 +139,7 @@ namespace g2o {
       _ni = 2;
       _nBad = 0;
     }
-
+    //printf("enter optimization iteration.....0");
     double rho=0;
     int& qmax = _levenbergIterations;
     qmax = 0;
@@ -117,10 +161,18 @@ namespace g2o {
         globalStats->timeUpdate = get_monotonic_time()-t;
       }
 
+      auto v1 = _optimizer->activeVertices();
+      //VertexSE3Expmap * vn = static_cast<VertexSE3Expmap *>(e1[0]->vertices()[0]);
+      VertexSE3Expmap * vn = static_cast<VertexSE3Expmap *>(v1[0]);
+
       // restore the diagonal
       _solver->restoreDiagonal();
 
+      memset(Htarget,0,_optimizer->cell_num_*_optimizer->cell_num_*sizeof(double));
+      memset(Hjoint,0,_optimizer->cell_num_*_optimizer->cell_num_*sizeof(double));
+      CudaComputeH(false, _optimizer->im0_, _optimizer->im1_, _optimizer->points3d_, _optimizer->bs_counter_, _optimizer->bs_value_ref_, _optimizer->bs_index_ref_, vn->estimate().to_homogeneous_matrix().data(), _optimizer->camera_intrincis_, _optimizer->bin_num_, _optimizer->bs_degree_, _optimizer->cell_num_, _optimizer->rows_, _optimizer->cols_ , _optimizer->Href_, pro_target, pro_joint, Htarget, Hjoint, der);
       _optimizer->computeActiveErrors();
+
       tempChi = _optimizer->activeRobustChi2();
 
       if (! ok2)
@@ -146,7 +198,16 @@ namespace g2o {
         _optimizer->pop(); // restore the last state before trying to optimize
       }
       qmax++;
+
     } while (rho<0 && qmax < _maxTrialsAfterFailure->value() && ! _optimizer->terminate());
+
+    //free after computing jacobian
+    free(Htarget);
+    free(Hjoint);
+    free(pro_target);
+    free(pro_joint);
+    free(der);
+    free(edge_active_flag);
 
     if (qmax == _maxTrialsAfterFailure->value() || rho==0)
       return Terminate;

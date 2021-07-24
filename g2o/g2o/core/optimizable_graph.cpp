@@ -227,6 +227,14 @@ namespace g2o {
     return 0;
   }
 
+  void OptimizableGraph::Edge::set_h(double h_target, double h_joint){
+    printf("should realize this in the NID class");
+  }
+
+  void OptimizableGraph::Edge::set_j(double j0, double j1, double j2, double j3, double j4, double j5){
+    printf("should realize this in the NID class");
+  }
+
 
   OptimizableGraph::OptimizableGraph()
   {
