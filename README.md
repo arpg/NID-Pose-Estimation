@@ -7,7 +7,7 @@ TO BE ADDED, accpeted by IROS 2021: Robust Pose Estimation Based  on Normalized 
 Opencv >= 3.0  
 Eigen >= 3.1
 You have to use the G2O along with the code because NID jacobian estimation is written in the this G2O  
-If you want to use GPU version, make sure you have CUDA > 8
+If you want to use GPU version, make sure you have CUDA > 8  
 GPU architecture > `Pascal`  
 
 Test on Ubuntu 18.04, Opecv 3 pass  
